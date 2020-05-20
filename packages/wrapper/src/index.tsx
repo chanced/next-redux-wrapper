@@ -19,19 +19,21 @@ const getSerializedState = (state: any, {serializeState}: Config = {}) =>
 
 const getStoreKey = ({storeKey}: Config = {}) => storeKey || STOREKEY;
 
-export declare type MakeStore<S = any, A extends Action = AnyAction> = (context: Context) => Store<S, A>;
+export declare type MakeStore<S = any, A extends Action = AnyAction, TStore extends Store<S, A> = Store<S, A>> = (
+    context: Context,
+) => TStore;
 
-export interface InitStoreOptions<S = any, A extends Action = AnyAction> {
-    makeStore: MakeStore<S, A>;
+export interface InitStoreOptions<S = any, A extends Action = AnyAction, TStore extends Store<S, A> = Store<S, A>> {
+    makeStore: MakeStore<S, A, TStore>;
     context: Context;
     config: Config<S>;
 }
 
-const initStore = <S extends {} = any, A extends Action = AnyAction>({
+const initStore = <S extends {} = any, A extends Action = AnyAction, TStore extends Store<S, A> = Store<S, A>>({
     makeStore,
     context,
     config,
-}: InitStoreOptions<S, A>): Store<S, A> => {
+}: InitStoreOptions<S, A, TStore>): TStore => {
     const storeKey = getStoreKey(config);
 
     const createStore = () => makeStore(context);
@@ -75,8 +77,12 @@ export interface GetStaticPropsContext {
     previewData?: any;
 }
 
-export const createWrapper = <S extends {} = any, A extends Action = AnyAction>(
-    makeStore: MakeStore<S, A>,
+export const createWrapper = <
+    S extends {} = any,
+    A extends Action = AnyAction,
+    TStore extends Store<S, A> = Store<S, A>
+>(
+    makeStore: MakeStore<S, A, TStore>,
     config: Config<S> = {},
 ) => {
     const makeProps = async ({
@@ -111,7 +117,7 @@ export const createWrapper = <S extends {} = any, A extends Action = AnyAction>(
     };
 
     const getInitialPageProps = <P extends {} = any>(
-        callback: (context: NextPageContext & {store: Store<S, A>}) => P | void,
+        callback: (context: NextPageContext & {store: TStore}) => P | void,
     ) => async (context: NextPageContext) => {
         if (context.store) {
             console.warn('No need to wrap pages if _app was wrapped');
@@ -121,12 +127,12 @@ export const createWrapper = <S extends {} = any, A extends Action = AnyAction>(
     };
 
     const getInitialAppProps = <P extends {} = any>(
-        callback: (context: AppContext & {store: Store<S, A>}) => P | void,
+        callback: (context: AppContext & {store: TStore}) => P | void,
     ) => async (context: AppContext) =>
         (await makeProps({callback, context, isApp: true})) as WrapperProps & AppInitialProps; // this is just to convince TS
 
     const getStaticProps = <P extends {} = any>(
-        callback: (context: GetStaticPropsContext & {store: Store<S, A>}) => P | void,
+        callback: (context: GetStaticPropsContext & {store: TStore}) => P | void,
     ): GetStaticProps<P> => async (context: any) => {
         const {
             initialProps: {props, ...settings},
@@ -143,7 +149,7 @@ export const createWrapper = <S extends {} = any, A extends Action = AnyAction>(
     };
 
     const getServerSideProps = <P extends {} = any>(
-        callback: (context: GetServerSidePropsContext & {store: Store<S, A>}) => P | void,
+        callback: (context: GetServerSidePropsContext & {store: TStore}) => P | void,
     ): GetServerSideProps<P> => getStaticProps<P>(callback as any) as any; // just not to repeat myself
 
     const withRedux = (Component: NextComponentType | App | any) => {
@@ -162,7 +168,7 @@ export const createWrapper = <S extends {} = any, A extends Action = AnyAction>(
                     initialStateFromGSPorGSSR,
                 });
 
-            const store = useRef<Store<S, A>>(initStore({makeStore, config, context}));
+            const store = useRef<TStore>(initStore({makeStore, config, context}));
 
             const hydrate = useCallback(() => {
                 store.current.dispatch({
@@ -228,7 +234,10 @@ export const createWrapper = <S extends {} = any, A extends Action = AnyAction>(
 };
 
 // Legacy
-export default <S extends {} = any, A extends Action = AnyAction>(makeStore: MakeStore<S, A>, config: Config = {}) => {
+export default <S extends {} = any, A extends Action = AnyAction, TStore extends Store<S, A> = Store<S, A>>(
+    makeStore: MakeStore<S, A, TStore>,
+    config: Config = {},
+) => {
     console.warn(
         '/!\\ You are using legacy implementaion. Please update your code: use createWrapper() and wrapper.withRedux().',
     );
@@ -251,10 +260,10 @@ export interface WrapperProps {
 }
 
 declare module 'next/dist/next-server/lib/utils' {
-    export interface NextPageContext<S = any, A extends Action = AnyAction> {
+    export interface NextPageContext<S = any, A extends Action = AnyAction, TStore extends Store<S, A> = Store<S, A>> {
         /**
          * Provided by next-redux-wrapper: The redux store
          */
-        store: Store<S, A>;
+        store: TStore;
     }
 }
